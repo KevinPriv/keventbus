@@ -18,7 +18,6 @@ class GuavaEventBusTest {
     @Subscribe
     fun `subscribed method`(event: MessageReceivedEvent) {
         // do something
-        Random.nextInt()
     }
 
     @Test

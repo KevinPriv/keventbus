@@ -10,7 +10,7 @@ class DesamsyEventBusEventBusTest {
     @Test
     @Order(0)
     fun `subscribing class`() {
-        eventBus.registerLambda(MessageReceivedEvent::class.java) { _ -> Random.nextInt() }
+        eventBus.registerLambda(MessageReceivedEvent::class.java) { _ -> }
     }
 
 

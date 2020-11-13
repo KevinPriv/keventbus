@@ -2,7 +2,6 @@ package me.kbrewster.eventbus
 
 import me.kbrewster.eventbus.invokers.InvokerType
 import me.kbrewster.eventbus.invokers.ReflectionInvoker
-import java.lang.reflect.Method
 import java.lang.reflect.Modifier
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
@@ -13,7 +12,7 @@ import kotlin.jvm.internal.Intrinsics
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.PROPERTY_SETTER)
 annotation class Subscribe(val priority: Int = 0)
 
-fun eventbus(lambda: EventBusBuilder.() -> Unit) : EventBus {
+fun eventbus(lambda: EventBusBuilder.() -> Unit): EventBus {
     return EventBusBuilder().apply(lambda).build()
 }
 
@@ -28,15 +27,22 @@ class EventBusBuilder {
      */
     private var exceptionHandler: (Exception) -> Unit = { exception -> throw exception }
 
-    fun invoker(lambda: () -> InvokerType) { this.invokerType = lambda() }
-    fun exceptionHandler(lambda: (Exception) -> Unit) { this.exceptionHandler = lambda }
+    fun invoker(lambda: () -> InvokerType) {
+        this.invokerType = lambda()
+    }
+
+    fun exceptionHandler(lambda: (Exception) -> Unit) {
+        this.exceptionHandler = lambda
+    }
+
     fun build() = EventBus(this.invokerType, this.exceptionHandler)
 
 }
 
-class EventBus(private val invokerType: InvokerType, private val exceptionHandler: (Exception) -> Unit) {
-    private class Subscriber(val `object`: Any, val method: Method?, val priority: Int, invoker: InvokerType.SubscriberMethod?) {
-        private val invoker: InvokerType.SubscriberMethod? = invoker
+class EventBus(private val invokerType: InvokerType = ReflectionInvoker(),
+               private val exceptionHandler: (Exception) -> Unit = { exception -> throw exception }) {
+
+    private class Subscriber(val `object`: Any, val priority: Int, private val invoker: InvokerType.SubscriberMethod?) {
 
         @Throws(Exception::class)
         operator fun invoke(arg: Any?) {
@@ -66,73 +72,59 @@ class EventBus(private val invokerType: InvokerType, private val exceptionHandle
         }
     }
 
-    private val subscribers: ConcurrentHashMap<Class<*>, MutableList<Subscriber>> = ConcurrentHashMap()
+    private val subscribers: ConcurrentHashMap<Class<*>, PriorityCopyAndWriteArrayList> = ConcurrentHashMap()
 
-    fun register(`object`: Any) {
-        var clazz: Class<*>? = `object`.javaClass
-        while (clazz != null) {
-            for (method in clazz.declaredMethods) {
-                val sub: Subscribe = method.getAnnotation(Subscribe::class.java) ?: continue
+    fun register(obj: Any) {
+        for (method in obj.javaClass.declaredMethods) {
+            val sub: Subscribe = method.getAnnotation(Subscribe::class.java) ?: continue
 
-                // Verification
-                Intrinsics.areEqual(method.returnType, Void.TYPE)
-                Intrinsics.areEqual(method.parameterCount, 1)
-                Intrinsics.areEqual(method.modifiers and Modifier.STATIC, Modifier.STATIC)
+            // Verification
+            Intrinsics.areEqual(method.returnType, Void.TYPE)
+            Intrinsics.areEqual(method.parameterCount, 1)
+            Intrinsics.areEqual(method.modifiers and Modifier.STATIC, Modifier.STATIC)
 
-                val parameterClazz = method.parameterTypes[0]
-                when {
-                    Modifier.isStatic(method.modifiers) -> Intrinsics.throwIllegalArgument("Cannot have static modifier on a @Subscribe method.")
-                    parameterClazz.isPrimitive -> Intrinsics.throwIllegalArgument("Cannot subscribe method to a primitive.")
-                    (parameterClazz.modifiers and (Modifier.ABSTRACT or Modifier.INTERFACE)) != 0 -> Intrinsics.throwIllegalArgument("Cannot subscribe method to a polymorphic class.")
-                }
-
-                var psc = parameterClazz.superclass
-                while (psc != null) {
-                    if(subscribers.containsKey(psc)) {
-                        Intrinsics.throwIllegalArgument("@Subscribe method \"$method\" cannot subscribe to class which inherits from subscribed class \"$psc\".")
-                    }
-                    psc = psc.superclass
-                }
-                var subscriberMethod: InvokerType.SubscriberMethod? = null
-                try {
-                    subscriberMethod = invokerType.setup(`object`, clazz, parameterClazz, method)
-                } catch (throwable: Throwable) {
-                    Intrinsics.throwAssert("Failed to setup invoker, ${throwable.message}")
-                }
-                val subscriber = Subscriber(`object`, method, sub.priority, subscriberMethod)
-                subscribers.putIfAbsent(parameterClazz, PriorityCopyAndWriteArrayList())
-                subscribers[parameterClazz]!!.add(subscriber)
+            // Parameter verification
+            val parameterClazz = method.parameterTypes[0]
+            when {
+                parameterClazz.isPrimitive -> throw IllegalArgumentException("Cannot subscribe method to a primitive.")
+                parameterClazz.modifiers and (Modifier.ABSTRACT or Modifier.INTERFACE) != 0 -> throw IllegalArgumentException("Cannot subscribe method to a polymorphic class.")
             }
-            clazz = clazz.superclass
+
+            val subscriberMethod = invokerType.setup(obj, obj.javaClass, parameterClazz, method)
+
+            val subscriber = Subscriber(obj, sub.priority, subscriberMethod)
+            subscribers.putIfAbsent(parameterClazz, PriorityCopyAndWriteArrayList())
+            subscribers[parameterClazz]!!.add(subscriber)
         }
     }
 
-    fun unregister(`object`: Any) {
-        var clazz: Class<*>? = `object`.javaClass
-        while (clazz != null) {
-            for (method in clazz.declaredMethods) {
-                if (method.getAnnotation(Subscribe::class.java) == null) {
-                    continue
-                }
-                val parameterClazz = method.parameterTypes[0]
-                subscribers[parameterClazz]?.remove(Subscriber(`object`, null, -1, null))
+    fun unregister(obj: Any) {
+        for (method in obj.javaClass.declaredMethods) {
+            if (method.getAnnotation(Subscribe::class.java) == null) {
+                continue
             }
-            clazz = clazz.superclass
+            subscribers[method.parameterTypes[0]]?.remove(Subscriber(obj, -1, null))
         }
     }
 
     fun post(event: Any) {
-        subscribers[event.javaClass]?.let { list ->
-            // executed in descending order
-            for (i in list.size-1 downTo 0) {
-                val subscriber = list[i]
-                try {
-                    subscriber.invoke(event)
-                } catch (e: Exception) {
-                    exceptionHandler(e)
-                }
+        val events = subscribers[event.javaClass] ?: return
+        // executed in descending order
+        for (i in (events.size-1) downTo 0) {
+            try {
+                events[i].invoke(event)
+            } catch (e: Exception) {
+                exceptionHandler(e)
             }
         }
+
     }
 
+    private inline fun iterateSubclasses(obj: Any, body: (Class<*>) -> Unit) {
+        var postClazz: Class<*>? = obj.javaClass
+        do {
+            body(postClazz!!)
+            postClazz = postClazz.superclass
+        } while (postClazz != null)
+    }
 }

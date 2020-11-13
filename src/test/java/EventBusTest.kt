@@ -2,17 +2,17 @@ import me.kbrewster.eventbus.Subscribe
 import me.kbrewster.eventbus.eventbus
 import me.kbrewster.eventbus.invokers.LMFInvoker
 import org.junit.jupiter.api.*
+import sun.plugin2.message.Message
 
 
 import kotlin.random.Random
 
 open class MessageReceivedEvent(val message: String)
 
-class OtherEvent(message2: String): MessageReceivedEvent(message2)
-
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class EventBusTest {
+
     private val eventBus = eventbus {
         invoker { LMFInvoker() }
         exceptionHandler { exception -> println("Error occurred in method: ${exception.message}")  }
@@ -27,7 +27,6 @@ class EventBusTest {
     @Subscribe
     fun `subscribed method`(event: MessageReceivedEvent) {
         // do something
-        Random.nextInt()
     }
 
     @Test
