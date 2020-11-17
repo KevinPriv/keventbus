@@ -2,7 +2,7 @@
 JVM Eventbus focused on concurrency and performance.
 
 ## Registering
-###Kotlin
+**Kotlin**
 ```kotlin
 // Create eventbus
 private val eventBus = eventbus {
@@ -22,7 +22,7 @@ fun `subscribed method`(event: MessageReceivedEvent) {
 eventBus.register(this)
 
 ```
-###Java
+**Java**
 ```java
 // Create eventbus
 private EventBus eventBus = new EventBus(new LMFInvoker(), e -> {
@@ -40,23 +40,23 @@ public void subscribedMethod(MessageReceivedEvent event) {
 eventBus.register(this)
 ```
 ## Posting
-###Kotlin
+**Kotlin**
 ```kotlin
 // Post all methods subscribed to the event `MessageReceivedEvent`
 eventBus.post(MessageReceivedEvent("Hello world"))
 ```
-###Java
+**Java**
 ```java 
 // Post all methods subscribed to the event `MessageReceivedEvent`
 eventBus.post(new MessageReceivedEvent("Hello world"));
 ```
 ## Unregistering
-###Kotlin
+**Kotlin**
 ```kotlin
 // Remove all @Subscribe 'd methods from an instance
 eventBus.unregister(this)
 ```
-###Java
+**Java**
 ```java
 // Remove all @Subscribe 'd methods from an instance
 eventBus.unregister(this)
