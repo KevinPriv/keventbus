@@ -13,7 +13,7 @@ import kotlin.jvm.internal.Intrinsics
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.PROPERTY_SETTER)
 annotation class Subscribe(val priority: Int = 0)
 
-class EventBus(private val invokerType: InvokerType = ReflectionInvoker(),
+class EventBus @JvmOverloads constructor(private val invokerType: InvokerType = ReflectionInvoker(),
                private val exceptionHandler: ExceptionHandler = object: ExceptionHandler {
                    override fun handle(exception: Exception) {
                        throw exception
