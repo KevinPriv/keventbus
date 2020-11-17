@@ -1,5 +1,6 @@
 package me.kbrewster.eventbus
 
+import me.kbrewster.eventbus.exception.ExceptionHandler
 import me.kbrewster.eventbus.invokers.InvokerType
 import me.kbrewster.eventbus.invokers.ReflectionInvoker
 import java.lang.reflect.Modifier
@@ -12,35 +13,12 @@ import kotlin.jvm.internal.Intrinsics
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.PROPERTY_SETTER)
 annotation class Subscribe(val priority: Int = 0)
 
-fun eventbus(lambda: EventBusBuilder.() -> Unit): EventBus {
-    return EventBusBuilder().apply(lambda).build()
-}
-
-class EventBusBuilder {
-    /**
-     * Default: reflection invoker
-     */
-    private var invokerType: InvokerType = ReflectionInvoker()
-
-    /**
-     * Default: throws exception again
-     */
-    private var exceptionHandler: (Exception) -> Unit = { exception -> throw exception }
-
-    fun invoker(lambda: () -> InvokerType) {
-        this.invokerType = lambda()
-    }
-
-    fun exceptionHandler(lambda: (Exception) -> Unit) {
-        this.exceptionHandler = lambda
-    }
-
-    fun build() = EventBus(this.invokerType, this.exceptionHandler)
-
-}
-
 class EventBus(private val invokerType: InvokerType = ReflectionInvoker(),
-               private val exceptionHandler: (Exception) -> Unit = { exception -> throw exception }) {
+               private val exceptionHandler: ExceptionHandler = object: ExceptionHandler {
+                   override fun handle(exception: Exception) {
+                       throw exception
+                   }
+               }) {
 
     private class Subscriber(val `object`: Any, val priority: Int, private val invoker: InvokerType.SubscriberMethod?) {
 
@@ -114,7 +92,7 @@ class EventBus(private val invokerType: InvokerType = ReflectionInvoker(),
             try {
                 events[i].invoke(event)
             } catch (e: Exception) {
-                exceptionHandler(e)
+                exceptionHandler.handle(e)
             }
         }
 
