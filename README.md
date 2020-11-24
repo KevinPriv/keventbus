@@ -1,5 +1,5 @@
 # KEventBus
-JVM Eventbus focused on concurrency and performance.
+JVM Eventbus focused on thread-safety and performance.
 
 ## Registering
 **Kotlin**
