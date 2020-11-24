@@ -1,26 +1,28 @@
 package me.kbrewster.eventbus
 
+import me.kbrewster.eventbus.collection.ConcurrentSubscriberArrayList
+import me.kbrewster.eventbus.collection.SubscriberArrayList
 import me.kbrewster.eventbus.exception.ExceptionHandler
 import me.kbrewster.eventbus.invokers.InvokerType
 import me.kbrewster.eventbus.invokers.ReflectionInvoker
 import java.lang.reflect.Modifier
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CopyOnWriteArrayList
-import kotlin.jvm.internal.Intrinsics
 
 @Retention(AnnotationRetention.RUNTIME)
 @Target(AnnotationTarget.FUNCTION, AnnotationTarget.PROPERTY_GETTER, AnnotationTarget.PROPERTY_SETTER)
 annotation class Subscribe(val priority: Int = 0)
 
-class EventBus @JvmOverloads constructor(private val invokerType: InvokerType = ReflectionInvoker(),
-               private val exceptionHandler: ExceptionHandler = object: ExceptionHandler {
+class EventBus @JvmOverloads constructor(
+        private val invokerType: InvokerType = ReflectionInvoker(),
+        private val exceptionHandler: ExceptionHandler = object: ExceptionHandler {
                    override fun handle(exception: Exception) {
                        throw exception
                    }
-               }) {
+               },
+        private val threadSaftey: Boolean = true) {
 
-    private class Subscriber(val `object`: Any, val priority: Int, private val invoker: InvokerType.SubscriberMethod?) {
+    class Subscriber(val obj: Any, val priority: Int, private val invoker: InvokerType.SubscriberMethod?) {
 
         @Throws(Exception::class)
         operator fun invoke(arg: Any?) {
@@ -32,38 +34,23 @@ class EventBus @JvmOverloads constructor(private val invokerType: InvokerType = 
         }
 
         override fun hashCode(): Int {
-            return `object`.hashCode()
+            return obj.hashCode()
         }
 
     }
 
-    private class PriorityCopyAndWriteArrayList : CopyOnWriteArrayList<Subscriber>() {
-        override fun add(element: Subscriber): Boolean {
-            if (size == 0) {
-                super.add(element)
-            } else {
-                var index = this.binarySearch(element, Comparator.comparingInt { obj: Subscriber -> obj.priority })
-                if (index < 0) index = -(index + 1)
-                super.add(index, element)
-            }
-            return true
-        }
-    }
-
-    private val subscribers: ConcurrentHashMap<Class<*>, PriorityCopyAndWriteArrayList> = ConcurrentHashMap()
+    private val subscribers: AbstractMap<Class<*>, MutableList<Subscriber>> =
+            if(threadSaftey) ConcurrentHashMap() else HashMap()
 
     fun register(obj: Any) {
         for (method in obj.javaClass.declaredMethods) {
             val sub: Subscribe = method.getAnnotation(Subscribe::class.java) ?: continue
 
-            // Verification
-            Intrinsics.areEqual(method.returnType, Void.TYPE)
-            Intrinsics.areEqual(method.parameterCount, 1)
-            Intrinsics.areEqual(method.modifiers and Modifier.STATIC, Modifier.STATIC)
-
-            // Parameter verification
+            // verification
             val parameterClazz = method.parameterTypes[0]
             when {
+                method.parameterCount != 1 -> throw IllegalArgumentException("Subscribed method must only have one parameter.")
+                method.returnType != Void.TYPE -> throw IllegalArgumentException("Subscribed method must be of type 'Void'. ")
                 parameterClazz.isPrimitive -> throw IllegalArgumentException("Cannot subscribe method to a primitive.")
                 parameterClazz.modifiers and (Modifier.ABSTRACT or Modifier.INTERFACE) != 0 -> throw IllegalArgumentException("Cannot subscribe method to a polymorphic class.")
             }
@@ -71,7 +58,7 @@ class EventBus @JvmOverloads constructor(private val invokerType: InvokerType = 
             val subscriberMethod = invokerType.setup(obj, obj.javaClass, parameterClazz, method)
 
             val subscriber = Subscriber(obj, sub.priority, subscriberMethod)
-            subscribers.putIfAbsent(parameterClazz, PriorityCopyAndWriteArrayList())
+            subscribers.putIfAbsent(parameterClazz, if(threadSaftey) ConcurrentSubscriberArrayList() else SubscriberArrayList())
             subscribers[parameterClazz]!!.add(subscriber)
         }
     }

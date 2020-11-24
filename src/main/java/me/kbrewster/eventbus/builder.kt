@@ -23,8 +23,14 @@ class EventBusBuilder {
         }
     }
 
+    var threadSaftey = false
+
     fun invoker(lambda: () -> InvokerType) {
         this.invokerType = lambda()
+    }
+
+    fun threadSaftey(lambda: () -> Boolean) {
+        this.threadSaftey = lambda()
     }
 
     inline fun exceptionHandler(crossinline lambda: (Exception) -> Unit) {
@@ -35,6 +41,6 @@ class EventBusBuilder {
         }
     }
 
-    fun build() = EventBus(this.invokerType, this.exceptionHandler)
+    fun build() = EventBus(this.invokerType, this.exceptionHandler, this.threadSaftey)
 
 }
