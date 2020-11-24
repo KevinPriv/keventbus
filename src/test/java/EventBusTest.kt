@@ -35,7 +35,7 @@ class EventBusTest {
     @Order(1)
     fun `posting event`() {
         repeat(10_000_000) {
-            eventBus.post(MessageReceivedEvent("Hello world"))
+            eventBus.post { MessageReceivedEvent("Hello world") }
         }
     }
 

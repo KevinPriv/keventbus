@@ -42,6 +42,17 @@ class EventBus @JvmOverloads constructor(
     private val subscribers: AbstractMap<Class<*>, MutableList<Subscriber>> =
             if(threadSaftey) ConcurrentHashMap() else HashMap()
 
+    /**
+     * Subscribes all of the methods marked with the `@Subscribe` annotation
+     * within the `obj` instance provided to th methods first parameter class
+     *
+     * e.g. registering an instance which includes the method below will invoke
+     * that method every time EventBus#post(MessageReceivedEvent()) is called.
+     * @Subscribe
+     * fun messageReceivedEvent(event: MessageReceivedEvent) {
+     * }
+     *
+     */
     fun register(obj: Any) {
         for (method in obj.javaClass.declaredMethods) {
             val sub: Subscribe = method.getAnnotation(Subscribe::class.java) ?: continue
@@ -63,6 +74,9 @@ class EventBus @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Unsubscribes all `@Subscribe`'d methods inside of the `obj` instance.
+     */
     fun unregister(obj: Any) {
         for (method in obj.javaClass.declaredMethods) {
             if (method.getAnnotation(Subscribe::class.java) == null) {
@@ -72,6 +86,10 @@ class EventBus @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Posts the event instance given to all the subscribers
+     * that are subscribed to the events class.
+     */
     fun post(event: Any) {
         val events = subscribers[event.javaClass] ?: return
         // executed in descending order
@@ -84,13 +102,24 @@ class EventBus @JvmOverloads constructor(
         }
     }
 
-    fun unsafePost(event: Any) {
-        val events = subscribers[event.javaClass] ?: return
+    /**
+     * Supplier is only used if there are subscribers listening to
+     * the event.
+     *
+     * Example usage: EventBus#post { ComputationallyHeavyEvent() }
+     *
+     * This allows events to only be constructed if needed.
+     */
+    inline fun <reified T> post(supplier: () -> T) {
+        val events = getSubscribedEvents(T::class.java) ?: return
+        val event = supplier()
         // executed in descending order
         for (i in (events.size-1) downTo 0) {
             events[i].invoke(event)
         }
     }
+
+    fun getSubscribedEvents(clazz: Class<*>) = subscribers[clazz]
 
     private inline fun iterateSubclasses(obj: Any, body: (Class<*>) -> Unit) {
         var postClazz: Class<*>? = obj.javaClass
