@@ -17,22 +17,20 @@ class EventBusTest {
     private val eventBus = eventbus {
         invoker { LMFInvoker() }
         exceptionHandler { exception -> println("Error occurred in method: ${exception.message}")  }
-        threadSaftey { true }
+        threadSaftey { false }
     }
 
     @Test
     @Order(0)
     fun `subscribing class`() {
-       // for(i in 0..1000) {
-            eventBus.register(this)
-     //   }
+        eventBus.register(this)
     }
 
     @Subscribe
     fun `subscribed method`(event: MessageReceivedEvent) {
         // do something
     }
-// cw 20%
+
     @Test
     @Order(1)
     fun `posting event`() {
