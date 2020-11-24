@@ -8,7 +8,7 @@ import sun.plugin2.message.Message
 
 import kotlin.random.Random
 
-open class MessageReceivedEvent(val message: String)
+class MessageReceivedEvent(val message: String)
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
@@ -17,19 +17,22 @@ class EventBusTest {
     private val eventBus = eventbus {
         invoker { LMFInvoker() }
         exceptionHandler { exception -> println("Error occurred in method: ${exception.message}")  }
+        threadSaftey { true }
     }
 
     @Test
     @Order(0)
     fun `subscribing class`() {
-        eventBus.register(this)
+       // for(i in 0..1000) {
+            eventBus.register(this)
+     //   }
     }
 
     @Subscribe
     fun `subscribed method`(event: MessageReceivedEvent) {
         // do something
     }
-
+// cw 20%
     @Test
     @Order(1)
     fun `posting event`() {

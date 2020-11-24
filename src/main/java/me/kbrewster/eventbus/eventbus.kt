@@ -82,7 +82,14 @@ class EventBus @JvmOverloads constructor(
                 exceptionHandler.handle(e)
             }
         }
+    }
 
+    fun unsafePost(event: Any) {
+        val events = subscribers[event.javaClass] ?: return
+        // executed in descending order
+        for (i in (events.size-1) downTo 0) {
+            events[i].invoke(event)
+        }
     }
 
     private inline fun iterateSubclasses(obj: Any, body: (Class<*>) -> Unit) {
