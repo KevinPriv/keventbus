@@ -1,5 +1,7 @@
 package me.kbrewster.eventbus.invokers;
 
+import sun.misc.Unsafe;
+
 import java.lang.invoke.*;
 import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
@@ -56,8 +58,15 @@ public class LMFInvoker implements InvokerType {
         JAVA_9 { // Java 9+
             @Override
             MethodHandles.Lookup privateLookup(Class clazz) throws Exception {
-                final Method privateLookupIn = MethodHandles.class.getMethod("privateLookupIn", Class.class, MethodHandles.Lookup.class);
-                return (MethodHandles.Lookup) privateLookupIn.invoke(null, clazz, MethodHandles.lookup());
+                final Field theUnsafe = Unsafe.class.getDeclaredField("theUnsafe");
+                theUnsafe.setAccessible(true);
+                final Unsafe unsafe = (Unsafe) theUnsafe.get(null);
+                final Field implLookup = MethodHandles.Lookup.class.getDeclaredField("IMPL_LOOKUP");
+                MethodHandles.publicLookup();
+                final MethodHandles.Lookup lookup = (MethodHandles.Lookup)
+                        unsafe.getObject(unsafe.staticFieldBase(implLookup), unsafe.staticFieldOffset(implLookup));
+
+                return lookup.in(clazz);
             }
         };
 
